@@ -865,12 +865,13 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
             import org.gradle.api.*;
             import org.gradle.api.tasks.*;
             import org.gradle.work.*;
+            import java.io.*;
             import java.util.*;
 
             @DisableCachingByDefault(because = "test task")
             public class MyTask extends DefaultTask {
                 @Nested
-                public ${type} getSome${type}() {
+                public ${typeName} getSome${typeName}() {
                     return ${producer};
                 }
 
@@ -881,12 +882,12 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
 
         expect:
         assertValidationFailsWith([
-            warning(nestedTypeUnsuited { type("MyTask").property("some${type}").annotatedType(className) },
+            warning(nestedTypeUnsuited { type("MyTask").property("some${typeName}").annotatedType(className) },
                 'validation_problems', 'nested_type_unsuited'),
         ])
 
         where:
-        type         | producer                   | className
+        typeName     | producer                   | className
         'Integer'    | 'Integer.valueOf(1)'       | 'java.lang.Integer'
         'String'     | 'new String()'             | 'java.lang.String'
         'File'       | 'new File("some/path")'    | 'java.io.File'
