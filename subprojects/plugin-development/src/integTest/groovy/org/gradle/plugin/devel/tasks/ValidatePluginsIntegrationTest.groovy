@@ -860,7 +860,7 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
     @ValidationTestFor(
         ValidationProblemId.NESTED_TYPE_UNSUITED
     )
-    def "validation fails for unsuited nested types"() {
+    def "validation fails for nested #typeName"() {
         javaTaskSource << """
             import org.gradle.api.*;
             import org.gradle.api.tasks.*;
@@ -871,8 +871,8 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
             @DisableCachingByDefault(because = "test task")
             public class MyTask extends DefaultTask {
                 @Nested
-                public ${typeName} getSome${typeName}() {
-                    return ${producer};
+                public $typeName getMy$typeName() {
+                    return $producer;
                 }
 
                 @TaskAction
@@ -882,15 +882,54 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
 
         expect:
         assertValidationFailsWith([
-            warning(nestedTypeUnsuited { type("MyTask").property("some${typeName}").annotatedType(className) },
+            warning(nestedTypeUnsuited { type("MyTask").property("my$typeName").annotatedType(className) },
                 'validation_problems', 'nested_type_unsuited'),
         ])
 
         where:
-        typeName     | producer                   | className
-        'Integer'    | 'Integer.valueOf(1)'       | 'java.lang.Integer'
-        'String'     | 'new String()'             | 'java.lang.String'
-        'File'       | 'new File("some/path")'    | 'java.io.File'
+        typeName  | producer                | className
+        'File'    | 'new File("some/path")' | 'java.io.File'
+        'Integer' | 'Integer.valueOf(1)'    | 'java.lang.Integer'
+        'String'  | 'new String()'          | 'java.lang.String'
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/23049")
+    @ValidationTestFor(
+        ValidationProblemId.NESTED_TYPE_UNSUITED
+    )
+    def "validation fails for nested #typeName<#parameterType>"() {
+        javaTaskSource << """
+            import org.gradle.api.*;
+            import org.gradle.api.provider.*;
+            import org.gradle.api.tasks.*;
+            import org.gradle.work.*;
+            import java.io.*;
+            import java.util.*;
+
+            @DisableCachingByDefault(because = "test task")
+            public class MyTask extends DefaultTask {
+                @Nested
+                public $typeName<$parameterType> getMy$typeName() {
+                    return $producer;
+                }
+
+                @TaskAction
+                public void doStuff() { }
+            }
+        """
+
+        expect:
+        assertValidationFailsWith([
+            warning(nestedTypeUnsuited { type("MyTask").property("my$typeName").annotatedType(className) },
+                'validation_problems', 'nested_type_unsuited'),
+        ])
+
+        where:
+        typeName   | parameterType    | producer                                                | className
+        'Iterable' | 'Integer'        | 'Arrays.asList(Integer.valueOf(1), Integer.valueOf(2))' | 'java.lang.Integer'
+        'List'     | 'String'         | 'Arrays.asList("value1", "value2")'                     | 'java.lang.String'
+        'Provider' | 'File'           | 'getProject().getObjects().property(File.class)'        | 'java.io.File'
+        'Map'      | 'String,Integer' | 'Collections.singletonMap("a", Integer.valueOf(1))'     | 'java.lang.Integer'
     }
 
     def "honors configured Java Toolchain to avoid compiled by a more recent version failure"() {

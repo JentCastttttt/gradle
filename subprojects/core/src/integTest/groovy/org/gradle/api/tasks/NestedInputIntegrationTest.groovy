@@ -825,12 +825,12 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
     @Issue("https://github.com/gradle/gradle/issues/23049")
     @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
-    def "validation fails for unsuited nested types"() {
+    def "validation fails for nested #type"() {
         buildFile << """
             abstract class CustomTask extends DefaultTask {
                 @Nested
-                ${type} getSome${type}() {
-                    return ${producer}
+                $type getMy$type() {
+                    return $producer
                 }
 
                 @TaskAction
@@ -842,7 +842,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         when:
         expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
-            "Type 'CustomTask' property 'some${type}' where type of '${className}' is unsuited for nested annotation. " +
+            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
                 "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
             'validation_problems',
             'nested_type_unsuited')
@@ -852,10 +852,79 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
         executedAndNotSkipped(":customTask")
 
         where:
-        type         | producer                   | className
-        'Integer'    | 'Integer.valueOf(1)'       | 'java.lang.Integer'
-        'String'     | 'new String()'             | 'java.lang.String'
-        'File'       | 'new File("some/path")'    | 'java.io.File'
+        type      | producer                | className
+        'File'    | 'new File("some/path")' | 'java.io.File'
+        'Integer' | 'Integer.valueOf(1)'    | 'java.lang.Integer'
+        'String'  | 'new String()'          | 'java.lang.String'
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/23049")
+    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
+    def "validation fails for nested #type<#parameterType>"() {
+        buildFile << """
+            abstract class CustomTask extends DefaultTask {
+                @Nested
+                $type<$parameterType> getMy$type() {
+                    return $producer
+                }
+
+                @TaskAction
+                void execute() { }
+            }
+
+            tasks.register("customTask", CustomTask) { }
+        """
+
+        when:
+        expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
+            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
+                "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
+            'validation_problems',
+            'nested_type_unsuited')
+        run("customTask")
+
+        then:
+        executedAndNotSkipped(":customTask")
+
+        where:
+        type       | parameterType    | producer                                            | className
+        'Iterable' | 'Integer'        | '[[Integer.valueOf(1)], [Integer.valueOf(2)]]'      | 'java.lang.Integer'
+        'List'     | 'String'         | '["value1", "value2"]'                              | 'java.lang.String'
+        'Provider' | 'File'           | 'project.providers.provider { Integer.valueOf(1) }' | 'java.io.File'
+        'Map'      | 'String,Integer' | '[a: Integer.valueOf(1), b: Integer.valueOf(2)]'    | 'java.lang.Integer'
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/23049")
+    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
+    def "validation fails for nested file #type"() {
+        buildFile << """
+            abstract class CustomTask extends DefaultTask {
+                @Nested
+                abstract $type getMy$type();
+
+                @TaskAction
+                void execute() { }
+            }
+
+            tasks.register("customTask", CustomTask) { }
+        """
+
+        when:
+        expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
+            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
+                "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
+            'validation_problems',
+            'nested_type_unsuited')
+        run("customTask")
+
+        then:
+        executedAndNotSkipped(":customTask")
+
+        where:
+        type                  | producer                              | className
+//        'File'                | 'new File("some/path")'               | 'java.io.File'
+        'RegularFileProperty' | 'project.objects.fileProperty()'      | 'org.gradle.api.file.RegularFileProperty'
+        'DirectoryProperty'   | 'project.objects.directoryProperty()' | 'org.gradle.api.file.DirectoryProperty'
     }
 
     private static String namedBeanClass() {
