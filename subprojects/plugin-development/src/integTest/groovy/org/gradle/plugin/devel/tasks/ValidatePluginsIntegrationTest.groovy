@@ -888,7 +888,6 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
 
         where:
         typeName  | producer                | className
-        'File'    | 'new File("some/path")' | 'java.io.File'
         'Integer' | 'Integer.valueOf(1)'    | 'java.lang.Integer'
         'String'  | 'new String()'          | 'java.lang.String'
     }
@@ -928,7 +927,7 @@ class ValidatePluginsIntegrationTest extends AbstractPluginValidationIntegration
         typeName   | parameterType    | producer                                                | className
         'Iterable' | 'Integer'        | 'Arrays.asList(Integer.valueOf(1), Integer.valueOf(2))' | 'java.lang.Integer'
         'List'     | 'String'         | 'Arrays.asList("value1", "value2")'                     | 'java.lang.String'
-        'Provider' | 'File'           | 'getProject().getObjects().property(File.class)'        | 'java.io.File'
+        'Provider' | 'Boolean'        | 'getProject().getObjects().property(Boolean.class)'     | 'java.lang.Boolean'
         'Map'      | 'String,Integer' | 'Collections.singletonMap("a", Integer.valueOf(1))'     | 'java.lang.Integer'
     }
 

@@ -29,6 +29,7 @@ import org.gradle.internal.UncheckedException;
 import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.properties.PropertyValue;
 import org.gradle.internal.properties.PropertyVisitor;
+import org.gradle.internal.properties.annotations.NestedBeanAnnotationHandler;
 import org.gradle.internal.properties.annotations.PropertyAnnotationHandler;
 import org.gradle.internal.properties.annotations.PropertyMetadata;
 import org.gradle.internal.properties.annotations.TypeMetadata;
@@ -70,6 +71,7 @@ public class DefaultPropertyWalker implements PropertyWalker {
             @Override
             public void visitNested(TypeMetadata typeMetadata, String qualifiedName, PropertyMetadata propertyMetadata, @Nullable Object value) {
                 typeMetadata.visitValidationFailures(qualifiedName, validationContext);
+                NestedBeanAnnotationHandler.validateType(typeMetadata, propertyMetadata, validationContext, propertyMetadata.getDeclaredType());
                 if (value != null) {
                     ImplementationValue implementation = implementationResolver.resolveImplementation(value);
                     visitor.visitInputProperty(qualifiedName, new ImplementationPropertyValue(implementation), false);

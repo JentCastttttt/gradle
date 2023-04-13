@@ -472,6 +472,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
         ValidationProblemId.VALUE_NOT_SET
     )
     def "null on nested bean is validated #description"() {
+        buildFile << nestedBeanWithStringInput()
         buildFile << """
             class TaskWithAbsentNestedInput extends DefaultTask {
                 @Nested
@@ -501,11 +502,12 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         where:
         description               | property
-        "for plain Java property" | "Object nested"
-        "for Provider property"   | "Provider<Object> nested = project.providers.provider { null }"
+        "for plain Java property" | "NestedBean nested"
+        "for Provider property"   | "Provider<NestedBean> nested = project.providers.provider { null }"
     }
 
     def "null on optional nested bean is allowed #description"() {
+        buildFile << nestedBeanWithStringInput()
         buildFile << """
             class TaskWithAbsentNestedInput extends DefaultTask {
                 @Nested
@@ -534,8 +536,8 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         where:
         description               | property
-        "for plain Java property" | "Object nested"
-        "for Provider property"   | "Provider<Object> nested = project.providers.provider { null }"
+        "for plain Java property" | "NestedBean nested"
+        "for Provider property"   | "Provider<NestedBean> nested = project.providers.provider { null }"
     }
 
     def "changes to nested bean implementation are detected"() {
@@ -785,13 +787,14 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
     @Issue("https://github.com/gradle/gradle/issues/24594")
     @ValidationTestFor(ValidationProblemId.NESTED_MAP_UNSUPPORTED_KEY_TYPE)
     def "nested map with non-string key works with deprecation warning"() {
+        buildFile << nestedBeanWithStringInput()
         buildFile << """
             abstract class CustomTask extends DefaultTask {
                 @Nested
-                abstract MapProperty<Integer, Object> getLazyMap()
+                abstract MapProperty<Integer, NestedBean> getLazyMap()
 
                 @Nested
-                Map<Integer, Object> eagerMap = [:]
+                Map<Integer, NestedBean> eagerMap = [:]
 
                 @OutputFile
                 abstract RegularFileProperty getOutputFile()
@@ -804,8 +807,8 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
             }
 
             tasks.register("customTask", CustomTask) {
-                lazyMap.put(100, "example")
-                eagerMap.put(100, "example")
+                lazyMap.put(100, new NestedBean('value1'))
+                eagerMap.put(100, new NestedBean('value1'))
                 outputFile = file("output.txt")
             }
         """
@@ -820,13 +823,15 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         then:
         executedAndNotSkipped(":customTask")
-        file("output.txt").text == "[100:example][100:example]"
+        file("output.txt").text ==~ /\[100:NestedBean@.*\]\[100:NestedBean@.*\]/
     }
 
     @Issue("https://github.com/gradle/gradle/issues/23049")
     @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
     def "validation fails for nested #type"() {
         buildFile << """
+            enum Letter { A, B, C }
+
             abstract class CustomTask extends DefaultTask {
                 @Nested
                 $type getMy$type() {
@@ -856,6 +861,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
         'File'    | 'new File("some/path")' | 'java.io.File'
         'Integer' | 'Integer.valueOf(1)'    | 'java.lang.Integer'
         'String'  | 'new String()'          | 'java.lang.String'
+        'Enum'    | 'Letter.A'              | 'java.lang.Enum'
     }
 
     @Issue("https://github.com/gradle/gradle/issues/23049")
@@ -877,7 +883,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         when:
         expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
-            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
+            "Type 'CustomTask' property 'my$type' where type of '$className<$parameterClassName>' is unsuited for nested annotation. " +
                 "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
             'validation_problems',
             'nested_type_unsuited')
@@ -887,44 +893,11 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
         executedAndNotSkipped(":customTask")
 
         where:
-        type       | parameterType    | producer                                            | className
-        'Iterable' | 'Integer'        | '[[Integer.valueOf(1)], [Integer.valueOf(2)]]'      | 'java.lang.Integer'
-        'List'     | 'String'         | '["value1", "value2"]'                              | 'java.lang.String'
-        'Provider' | 'File'           | 'project.providers.provider { Integer.valueOf(1) }' | 'java.io.File'
-        'Map'      | 'String,Integer' | '[a: Integer.valueOf(1), b: Integer.valueOf(2)]'    | 'java.lang.Integer'
-    }
-
-    @Issue("https://github.com/gradle/gradle/issues/23049")
-    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
-    def "validation fails for nested file #type"() {
-        buildFile << """
-            abstract class CustomTask extends DefaultTask {
-                @Nested
-                abstract $type getMy$type();
-
-                @TaskAction
-                void execute() { }
-            }
-
-            tasks.register("customTask", CustomTask) { }
-        """
-
-        when:
-        expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
-            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
-                "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
-            'validation_problems',
-            'nested_type_unsuited')
-        run("customTask")
-
-        then:
-        executedAndNotSkipped(":customTask")
-
-        where:
-        type                  | producer                              | className
-//        'File'                | 'new File("some/path")'               | 'java.io.File'
-        'RegularFileProperty' | 'project.objects.fileProperty()'      | 'org.gradle.api.file.RegularFileProperty'
-        'DirectoryProperty'   | 'project.objects.directoryProperty()' | 'org.gradle.api.file.DirectoryProperty'
+        type       | parameterType     | producer                                            | className                          | parameterClassName
+        'Iterable' | 'Integer'         | '[[Integer.valueOf(1)], [Integer.valueOf(2)]]'      | 'java.lang.Iterable'               | 'java.lang.Integer'
+        'List'     | 'String'          | '["value1", "value2"]'                              | 'java.util.List'                   | 'java.lang.String'
+        'Provider' | 'File'            | 'project.providers.provider { Integer.valueOf(1) }' | 'org.gradle.api.provider.Provider' | 'java.io.File'
+        'Map'      | 'String, Integer' | '[a: Integer.valueOf(1), b: Integer.valueOf(2)]'    | 'java.util.Map'                    | 'java.lang.String, java.lang.Integer'
     }
 
     private static String namedBeanClass() {

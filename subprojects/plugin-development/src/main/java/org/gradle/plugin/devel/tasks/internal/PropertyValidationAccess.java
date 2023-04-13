@@ -25,6 +25,7 @@ import org.gradle.api.tasks.Nested;
 import org.gradle.cache.internal.DefaultCrossBuildInMemoryCacheFactory;
 import org.gradle.internal.event.DefaultListenerManager;
 import org.gradle.internal.instantiation.generator.DefaultInstantiatorFactory;
+import org.gradle.internal.properties.annotations.NestedBeanAnnotationHandler;
 import org.gradle.internal.properties.annotations.PropertyMetadata;
 import org.gradle.internal.properties.annotations.TypeMetadata;
 import org.gradle.internal.properties.annotations.TypeMetadataStore;
@@ -39,6 +40,7 @@ import org.gradle.internal.service.scopes.Scope.Global;
 import org.gradle.internal.state.DefaultManagedFactoryRegistry;
 
 import javax.annotation.Nullable;
+import java.lang.reflect.Modifier;
 import java.util.List;
 
 /**
@@ -100,6 +102,9 @@ public class PropertyValidationAccess {
             @Override
             public void visitNested(TypeMetadata typeMetadata, String qualifiedName, PropertyMetadata propertyMetadata, TypeToken<?> value) {
                 typeMetadata.visitValidationFailures(qualifiedName, validationContext);
+                if (Modifier.isFinal(value.getRawType().getModifiers())) {
+                    NestedBeanAnnotationHandler.validateType(typeMetadata, propertyMetadata, validationContext, value);
+                }
             }
         });
     }
