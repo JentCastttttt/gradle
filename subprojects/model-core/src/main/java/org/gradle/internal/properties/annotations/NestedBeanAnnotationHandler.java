@@ -73,23 +73,4 @@ public class NestedBeanAnnotationHandler extends AbstractPropertyAnnotationHandl
             );
         }
     }
-
-    public static void validateType(
-        TypeMetadata typeMetadata,
-        PropertyMetadata propertyMetadata,
-        TypeValidationContext validationContext,
-        TypeToken<?> typeToken
-    ) {
-        if (!typeMetadata.hasAnnotatedProperties()) {
-            validationContext.visitPropertyProblem(problem ->
-                problem.withId(ValidationProblemId.NESTED_TYPE_UNSUITED)
-                    .reportAs(WARNING)
-                    .forProperty(propertyMetadata.getPropertyName())
-                    .withDescription(() -> "where type of '" + typeToken + "' is unsuited for nested annotation")
-                    .happensBecause("Primitive wrapper types and others are unsuited for nested annotation")
-                    .addPossibleSolution("Change to a suited type, e.g. 'Provider<T>', 'Iterable<T>' or '<MapProperty<K, V>>'")
-                    .documentedAt("validation_problems", "nested_type_unsuited")
-            );
-        }
-    }
 }

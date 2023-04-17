@@ -436,13 +436,13 @@ trait ValidationMessageChecker {
     }
 
     @ValidationTestFor(
-        ValidationProblemId.NESTED_TYPE_UNSUITED
+        ValidationProblemId.NESTED_TYPE_UNSUPPORTED
     )
-    String nestedTypeUnsuited(@DelegatesTo(value = NestedTypeUnsuited, strategy = Closure.DELEGATE_FIRST) Closure<?> spec) {
-        def config = display(NestedTypeUnsuited, "nested_type_unsuited", spec)
-        config.description("where type of '${config.annotatedType}' is unsuited for nested annotation.")
-            .reason("Primitive wrapper types and others are unsuited for nested annotation.")
-            .solution("Change to a suited type, e.g. 'Provider<T>', 'Iterable<T>' or '<MapProperty<K, V>>'")
+    String nestedTypeUnsupported(@DelegatesTo(value = NestedTypeUnsupported, strategy = Closure.DELEGATE_FIRST) Closure<?> spec) {
+        def config = display(NestedTypeUnsupported, "nested_type_unsupported", spec)
+        config.description("where nested type '${config.annotatedType}' is not supported.")
+            .reason("Nested types must declare annotated properties.")
+            .solution("Declare annotated properties on the nested type, e.g. 'Provider<T>', 'Iterable<T>', or '<MapProperty<K, V>>', where 'T' and 'V' must have one or more annotated properties")
             .render()
     }
 
@@ -988,15 +988,15 @@ trait ValidationMessageChecker {
         }
     }
 
-    static class NestedTypeUnsuited extends ValidationMessageDisplayConfiguration<NestedTypeUnsuited> {
+    static class NestedTypeUnsupported extends ValidationMessageDisplayConfiguration<NestedTypeUnsupported> {
 
         String annotatedType
 
-        NestedTypeUnsuited(ValidationMessageChecker checker) {
+        NestedTypeUnsupported(ValidationMessageChecker checker) {
             super(checker)
         }
 
-        NestedTypeUnsuited annotatedType(String annotatedType) {
+        NestedTypeUnsupported annotatedType(String annotatedType) {
             this.annotatedType = annotatedType
             this
         }

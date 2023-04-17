@@ -823,18 +823,18 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         then:
         executedAndNotSkipped(":customTask")
-        file("output.txt").text ==~ /\[100:NestedBean@.*\]\[100:NestedBean@.*\]/
+        file("output.txt").text == "[100:value1][100:value1]"
     }
 
     @Issue("https://github.com/gradle/gradle/issues/23049")
-    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
-    def "validation fails for nested #type"() {
+    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUPPORTED)
+    def "nested #type#parameterType is validated with deprecation warning"() {
         buildFile << """
-            enum Letter { A, B, C }
+            enum SomeEnum { A, B, C }
 
             abstract class CustomTask extends DefaultTask {
                 @Nested
-                $type getMy$type() {
+                $type$parameterType getMy$type() {
                     return $producer
                 }
 
@@ -847,30 +847,35 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
         when:
         expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
-            "Type 'CustomTask' property 'my$type' where type of '$className' is unsuited for nested annotation. " +
-                "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
+            "Type 'CustomTask' property 'my$type' where nested type '$className$parameterClassName' is not supported. " +
+                "Reason: Nested types must declare annotated properties.",
             'validation_problems',
-            'nested_type_unsuited')
+            'nested_type_unsupported')
         run("customTask")
 
         then:
         executedAndNotSkipped(":customTask")
 
         where:
-        type      | producer                | className
-        'File'    | 'new File("some/path")' | 'java.io.File'
-        'Integer' | 'Integer.valueOf(1)'    | 'java.lang.Integer'
-        'String'  | 'new String()'          | 'java.lang.String'
-        'Enum'    | 'Letter.A'              | 'java.lang.Enum'
+        type       | parameterType      | producer                                               | className                          | parameterClassName
+        'File'     | ''                 | 'new File("some/path")'                                | 'java.io.File'                     | ''
+        'Integer'  | ''                 | 'Integer.valueOf(1)'                                   | 'java.lang.Integer'                | ''
+        'SomeEnum' | ''                 | 'SomeEnum.A'                                           | 'SomeEnum'                         | ''
+        'String'   | ''                 | 'new String()'                                         | 'java.lang.String'                 | ''
+        'Iterable' | '<Integer>'        | '[[Integer.valueOf(1)], [Integer.valueOf(2)]]'         | 'java.lang.Iterable'               | '<java.lang.Integer>'
+        'List'     | '<String>'         | '["value1", "value2"]'                                 | 'java.util.List'                   | '<java.lang.String>'
+        'Map'      | '<String,Integer>' | '[a: Integer.valueOf(1), b: Integer.valueOf(2)]'       | 'java.util.Map'                    | '<java.lang.String, java.lang.Integer>'
+        'Provider' | '<Boolean>'        | 'project.providers.provider { Boolean.valueOf(true) }' | 'org.gradle.api.provider.Provider' | '<java.lang.Boolean>'
     }
 
     @Issue("https://github.com/gradle/gradle/issues/23049")
-    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUITED)
-    def "validation fails for nested #type<#parameterType>"() {
+    @ValidationTestFor(ValidationProblemId.NESTED_TYPE_UNSUPPORTED)
+    def "nested #type#parameterType is validated without deprecation warning"() {
+        buildFile << nestedBeanWithStringInput()
         buildFile << """
             abstract class CustomTask extends DefaultTask {
                 @Nested
-                $type<$parameterType> getMy$type() {
+                $type$parameterType getMy$type() {
                     return $producer
                 }
 
@@ -882,22 +887,17 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
         """
 
         when:
-        expectThatExecutionOptimizationDisabledWarningIsDisplayed(executer,
-            "Type 'CustomTask' property 'my$type' where type of '$className<$parameterClassName>' is unsuited for nested annotation. " +
-                "Reason: Primitive wrapper types and others are unsuited for nested annotation.",
-            'validation_problems',
-            'nested_type_unsuited')
         run("customTask")
 
         then:
         executedAndNotSkipped(":customTask")
 
         where:
-        type       | parameterType     | producer                                            | className                          | parameterClassName
-        'Iterable' | 'Integer'         | '[[Integer.valueOf(1)], [Integer.valueOf(2)]]'      | 'java.lang.Iterable'               | 'java.lang.Integer'
-        'List'     | 'String'          | '["value1", "value2"]'                              | 'java.util.List'                   | 'java.lang.String'
-        'Provider' | 'File'            | 'project.providers.provider { Integer.valueOf(1) }' | 'org.gradle.api.provider.Provider' | 'java.io.File'
-        'Map'      | 'String, Integer' | '[a: Integer.valueOf(1), b: Integer.valueOf(2)]'    | 'java.util.Map'                    | 'java.lang.String, java.lang.Integer'
+        type         | parameterType         | producer
+        'NestedBean' | ''                    | 'new NestedBean("input")'
+        'Iterable'   | '<NestedBean>'        | 'Arrays.asList(new NestedBean("input"), new NestedBean("input"))'
+        'Map'        | '<String,NestedBean>' | 'Collections.singletonMap("a", new NestedBean("input"))'
+        'Provider'   | '<NestedBean>'        | 'getProject().getProviders().provider(() -> new NestedBean("input"))'
     }
 
     private static String namedBeanClass() {
@@ -1030,6 +1030,10 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec implements Dire
 
                 NestedBean(String input) {
                     this.input = input
+                }
+
+                String toString() {
+                    input
                 }
             }
         """
