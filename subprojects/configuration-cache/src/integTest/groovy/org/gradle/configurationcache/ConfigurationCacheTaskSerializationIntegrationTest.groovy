@@ -21,6 +21,55 @@ import java.util.logging.Level
 
 class ConfigurationCacheTaskSerializationIntegrationTest extends AbstractConfigurationCacheIntegrationTest {
 
+    def "don't serialize a task when it's used as files input"() {
+        file("copy1source.txt") << "Copy 1"
+        file("copy2source.txt") << "Copy 2"
+        file("copy3source.txt") << "Copy 3"
+
+        buildFile << """
+            def copy1 = tasks.register("copy1", Copy) {
+                destinationDir = layout.buildDirectory.dir("copy1").get().asFile
+                from file("copy1source.txt")
+            }
+
+            def copy2 = tasks.register("copy2", Copy) {
+                destinationDir = layout.buildDirectory.dir("copy2").get().asFile
+                from file("copy2source.txt")
+            }
+
+            def copy3 = tasks.register("copy3", Copy) {
+                destinationDir = layout.buildDirectory.dir("copy3").get().asFile
+                from file("copy3source.txt")
+            }
+
+            tasks.register("reader1") {
+                inputs.files(copy1)
+                def copy1destDir = copy1.get().destinationDir
+                doLast {
+                    println new File(copy1destDir, "copy1source.txt").text
+                }
+            }
+
+            tasks.register("reader2") {
+                inputs.files(copy2, copy3)
+                def copy2destDir = copy2.get().destinationDir
+                def copy3destDir = copy3.get().destinationDir
+                doLast {
+                    println new File(copy2destDir, "copy2source.txt").text
+                    println new File(copy3destDir, "copy3source.txt").text
+                }
+            }
+        """
+
+        when:
+        configurationCacheRun "reader1", "reader2"
+
+        then:
+        outputContains("Copy 1")
+        outputContains("Copy 2")
+        outputContains("Copy 3")
+    }
+
     def "restores task fields whose value is an object graph with cycles"() {
         buildFile << """
             class SomeBean {

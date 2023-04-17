@@ -28,6 +28,7 @@ import org.gradle.api.internal.tasks.TaskInputFilePropertyBuilderInternal
 import org.gradle.api.internal.tasks.TaskLocalStateInternal
 import org.gradle.api.internal.tasks.properties.InputParameterUtils
 import org.gradle.api.specs.Spec
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.configurationcache.extensions.uncheckedCast
 import org.gradle.configurationcache.problems.PropertyKind
 import org.gradle.configurationcache.problems.PropertyTrace
@@ -287,12 +288,28 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(
     suspend fun writeOutputProperty(propertyName: String, propertyValue: Any?) =
         writeProperty(propertyName, propertyValue, PropertyKind.OutputProperty)
 
+    fun unpackInputFilePropertyValue(propertyValue: PropertyValue): Any? {
+        val unpackedValue = DeferredUtil.unpackOrNull(propertyValue) ?: return null
+
+        return when {
+            unpackedValue.javaClass.isArray -> {
+                val unpackedValueArray = unpackedValue as Array<*>
+                unpackedValueArray.map {
+                    if (it is TaskProvider<*>) task.project.files(it)
+                    else it
+                }
+            }
+            Task::class.java.isAssignableFrom(unpackedValue::class.java) -> task.project.files(unpackedValue)
+            else -> unpackedValue
+        }
+    }
+
     val inputProperties = collectRegisteredInputsOf(task)
     writeCollection(inputProperties) { property ->
         property.run {
             when (this) {
                 is RegisteredProperty.InputFile -> {
-                    val finalValue = DeferredUtil.unpackOrNull(propertyValue)
+                    val finalValue = unpackInputFilePropertyValue(propertyValue)
                     writeInputProperty(propertyName, finalValue)
                     writeBoolean(optional)
                     writeBoolean(true)
