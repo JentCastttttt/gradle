@@ -83,6 +83,7 @@ import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.RootComponen
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.SelectedArtifactSet;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.VisitedArtifactSet;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.projectresult.ResolvedProjectConfiguration;
+import org.gradle.api.internal.artifacts.result.ResolutionResultInternal;
 import org.gradle.api.internal.artifacts.transform.DefaultExtraExecutionGraphDependenciesResolverFactory;
 import org.gradle.api.internal.artifacts.transform.ExtraExecutionGraphDependenciesResolverFactory;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
@@ -172,10 +173,6 @@ import static org.gradle.util.internal.ConfigureUtil.configure;
 @SuppressWarnings("rawtypes")
 public class DefaultConfiguration extends AbstractFileCollection implements ConfigurationInternal, MutationValidator, ResettableConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultConfiguration.class);
-
-    private static final Action<Throwable> DEFAULT_ERROR_HANDLER = throwable -> {
-        throw UncheckedException.throwAsUncheckedException(throwable);
-    };
 
     private final ConfigurationResolver resolver;
     private final DependencyMetaDataProvider metaDataProvider;
@@ -1772,7 +1769,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
     /**
      * {@inheritDoc}
-     * 
+     *
      * @implNote Usage: This method should only be called on consumable or resolvable configurations and will emit a deprecation warning if
      * called on a configuration that does not permit this usage, or has had allowed this usage but marked it as deprecated.
      */
@@ -2179,7 +2176,7 @@ since users cannot create non-legacy configurations and there is no current publ
         @Override
         public ResolutionResult getResolutionResult() {
             assertIsResolvable();
-            return new LenientResolutionResult(DEFAULT_ERROR_HANDLER);
+            return new LenientResolutionResult(false);
         }
 
         @Override
@@ -2213,8 +2210,8 @@ since users cannot create non-legacy configurations and there is no current publ
         }
 
         @Override
-        public ResolutionResult getResolutionResult(Action<? super Throwable> errorHandler) {
-            return new LenientResolutionResult(errorHandler);
+        public ResolutionResult getLenientResolutionResult() {
+            return new LenientResolutionResult(true);
         }
 
         private class ConfigurationArtifactView implements ArtifactView {
@@ -2254,12 +2251,19 @@ since users cannot create non-legacy configurations and there is no current publ
             }
         }
 
-        private class LenientResolutionResult implements ResolutionResult {
-            private final Action<? super Throwable> errorHandler;
+        /**
+         * A resolution result that lazily resolves the configuration. The laziness is needed to properly support {@link #getRootComponent}.
+         */
+        private class LenientResolutionResult implements ResolutionResultInternal {
+            private final boolean lenient;
+            private volatile Throwable nonFatalFailure;
             private volatile ResolutionResult delegate;
 
-            private LenientResolutionResult(Action<? super Throwable> errorHandler) {
-                this.errorHandler = errorHandler;
+            /**
+             * @param lenient If true, non-fatal failures will not be thrown during resolution.
+             */
+            private LenientResolutionResult(boolean lenient) {
+                this.lenient = lenient;
             }
 
             private void resolve() {
@@ -2268,15 +2272,9 @@ since users cannot create non-legacy configurations and there is no current publ
                         if (delegate == null) {
                             ResolveState currentState = resolveToStateOrLater(ARTIFACTS_RESOLVED);
                             delegate = currentState.getCachedResolverResults().getResolutionResult();
-                            Throwable failure = currentState.getCachedResolverResults().getNonFatalFailure();
-                            if (failure != null) {
-                                errorHandler.execute(failure);
-                            }
-
-                            // Consume the failure so we don't throw it again.
-                            // We can only consume it if we hold the project lock. Ideally, we shouldn't perform the consumption here.
-                            if (failure != null && domainObjectContext.getModel().hasMutableState()) {
-                                currentResolveState.set(new ArtifactsResolved(currentState.getCachedResolverResults().withoutNonFatalFailure()));
+                            this.nonFatalFailure = currentState.getCachedResolverResults().getNonFatalFailure();
+                            if (nonFatalFailure != null && !lenient) {
+                                throw UncheckedException.throwAsUncheckedException(nonFatalFailure);
                             }
                         }
                     }
@@ -2292,6 +2290,13 @@ since users cannot create non-legacy configurations and there is no current publ
             @Override
             public Provider<ResolvedComponentResult> getRootComponent() {
                 return new DefaultProvider<>(this::getRoot);
+            }
+
+            public Provider<Throwable> getNonFatalFailure() {
+                return new DefaultProvider<>(() -> {
+                    resolve();
+                    return nonFatalFailure;
+                });
             }
 
             @Override
