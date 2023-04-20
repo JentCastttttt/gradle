@@ -16,10 +16,12 @@
 
 package org.gradle.api.internal.file;
 
+import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 
 import javax.inject.Inject;
+import java.util.function.Function;
 
 public abstract class DefaultFileAccessPermission extends AbstractImmutableFileAccessPermission implements FileAccessPermissionInternal {
 
@@ -48,34 +50,29 @@ public abstract class DefaultFileAccessPermission extends AbstractImmutableFileA
     }
 
     @Override
-    public void unix(String permission) {
-        getRead().value(isRead(permission));
-        getWrite().value(isWrite(permission));
-        getExecute().value(isExecute(permission));
+    public void unix(Provider<String> permission, int index) {
+        getRead().set(decode(permission, index, DefaultFileAccessPermission::isRead, DefaultFileAccessPermission::isRead));
+        getWrite().set(decode(permission, index, DefaultFileAccessPermission::isWrite, DefaultFileAccessPermission::isWrite));
+        getExecute().set(decode(permission, index, DefaultFileAccessPermission::isExecute, DefaultFileAccessPermission::isExecute));
     }
 
-    private static boolean isRead(String permission) {
-        if (permission.length() == 1) {
-            return isRead(toUnixNumericPermissions(permission));
-        } else {
-            return isRead(permission.charAt(0));
-        }
-    }
-
-    private static boolean isWrite(String permission) {
-        if (permission.length() == 1) {
-            return isWrite(toUnixNumericPermissions(permission));
-        } else {
-            return isWrite(permission.charAt(1));
-        }
-    }
-
-    private static boolean isExecute(String permission) {
-        if (permission.length() == 1) {
-            return isExecute(toUnixNumericPermissions(permission));
-        } else {
-            return isExecute(permission.charAt(2));
-        }
+    private static Provider<Boolean> decode(
+        Provider<String> permission,
+        int index,
+        Function<Integer, Boolean> numericDecoder,
+        Function<String, Boolean> symbolicDecoder
+    ) {
+        return permission.map(p -> {
+            try {
+                if (p.length() == 3) {
+                    return numericDecoder.apply(toUnixNumericPermissions(p.substring(index, index + 1)));
+                } else {
+                    return symbolicDecoder.apply(p.substring(3 * index, 3 * (index + 1)));
+                }
+            } catch (IllegalArgumentException cause) {
+                throw new InvalidUserDataException("'" + p + "' isn't a proper Unix permission. " + cause.getMessage());
+            }
+        });
     }
 
     private static int toUnixNumericPermissions(String permissions) {
