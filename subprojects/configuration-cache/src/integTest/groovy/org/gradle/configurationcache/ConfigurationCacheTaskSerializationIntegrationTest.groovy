@@ -21,7 +21,7 @@ import java.util.logging.Level
 
 class ConfigurationCacheTaskSerializationIntegrationTest extends AbstractConfigurationCacheIntegrationTest {
 
-    def "don't serialize a task when it's used as files input"() {
+    def "don't serialize a task when it's used as 'files(#type)' input"() {
         file("copy1source.txt") << "Copy 1"
         file("copy2source.txt") << "Copy 2"
         file("copy3source.txt") << "Copy 3"
@@ -43,7 +43,7 @@ class ConfigurationCacheTaskSerializationIntegrationTest extends AbstractConfigu
             }
 
             tasks.register("reader1") {
-                inputs.files(copy1)
+                inputs.files(copy1$suffix)
                 def copy1destDir = copy1.get().destinationDir
                 doLast {
                     println new File(copy1destDir, "copy1source.txt").text
@@ -51,7 +51,7 @@ class ConfigurationCacheTaskSerializationIntegrationTest extends AbstractConfigu
             }
 
             tasks.register("reader2") {
-                inputs.files(copy2, copy3)
+                inputs.files(copy2$suffix, copy3$suffix)
                 def copy2destDir = copy2.get().destinationDir
                 def copy3destDir = copy3.get().destinationDir
                 doLast {
@@ -68,6 +68,11 @@ class ConfigurationCacheTaskSerializationIntegrationTest extends AbstractConfigu
         outputContains("Copy 1")
         outputContains("Copy 2")
         outputContains("Copy 3")
+
+        where:
+        type           | suffix
+        "Task"         | ".get()"
+        "TaskProvider" | ""
     }
 
     def "restores task fields whose value is an object graph with cycles"() {

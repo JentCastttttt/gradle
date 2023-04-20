@@ -294,12 +294,17 @@ suspend fun WriteContext.writeRegisteredPropertiesOf(
         return when {
             unpackedValue.javaClass.isArray -> {
                 val unpackedValueArray = unpackedValue as Array<*>
-                unpackedValueArray.map {
-                    if (it is TaskProvider<*>) task.project.files(it)
-                    else it
-                }
+                unpackedValueArray
+                    .filterNotNull()
+                    .map {
+                        when {
+                            TaskProvider::class.java.isAssignableFrom(it.javaClass) -> task.project.files(it)
+                            Task::class.java.isAssignableFrom(it.javaClass) -> task.project.files(it)
+                            else -> it
+                        }
+                    }
             }
-            Task::class.java.isAssignableFrom(unpackedValue::class.java) -> task.project.files(unpackedValue)
+            Task::class.java.isAssignableFrom(unpackedValue.javaClass) -> task.project.files(unpackedValue)
             else -> unpackedValue
         }
     }
