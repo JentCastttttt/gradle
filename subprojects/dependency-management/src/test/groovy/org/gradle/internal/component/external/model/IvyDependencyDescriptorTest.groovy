@@ -32,11 +32,13 @@ import org.gradle.internal.component.external.model.ivy.IvyDependencyDescriptor
 import org.gradle.internal.component.model.ComponentGraphResolveMetadata
 import org.gradle.internal.component.model.ComponentGraphResolveState
 import org.gradle.internal.component.model.ConfigurationGraphResolveMetadata
+import org.gradle.internal.component.model.ConfigurationGraphResolveState
 import org.gradle.internal.component.model.ConfigurationMetadata
 import org.gradle.internal.component.model.ConfigurationNotFoundException
 import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.component.model.Exclude
 import org.gradle.internal.component.model.ModuleConfigurationMetadata
+import org.gradle.internal.component.model.VariantGraphResolveState
 
 import static com.google.common.collect.ImmutableList.copyOf
 
@@ -171,12 +173,10 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         fromConfig.hierarchy >> ImmutableSet.of("from")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "to-1")
@@ -193,12 +193,10 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ModuleConfigurationMetadata)
-        def toConfig2 = Stub(ModuleConfigurationMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         fromConfig.hierarchy >> ImmutableSet.of("from", "super")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "to-1")
@@ -216,13 +214,11 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         fromConfig.hierarchy >> ImmutableSet.of("from")
         fromConfig2.hierarchy >> ImmutableSet.of("other")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "to-1")
@@ -240,14 +236,12 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
         fromConfig.hierarchy >> ImmutableSet.of("from")
-        def toConfig1 = config('to-1', true)
-        def toConfig2 = config('to-2', true)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         def toConfig3 = config('to-3', false)
         toState.metadata >> toComponent
         toComponent.getConfigurationNames() >> ["to-1", "to-2", "to-3"]
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
-        toComponent.getConfiguration("to-3") >> toConfig3
+        toState.getConfiguration("to-3") >> toConfig3
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "*")
@@ -259,12 +253,16 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         metadata.selectLegacyConfigurations(fromComponent, fromConfig, toState).variants == [toConfig1, toConfig2]
     }
 
-    private ConfigurationGraphResolveMetadata config(name, visible) {
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        toConfig1.visible >> visible
-        toConfig1.name >> name
-        toConfig1.getHierarchy() >> ImmutableSet.of(name)
-        toConfig1
+    private ConfigurationGraphResolveState config(name, visible) {
+        def toConfig = Stub(ConfigurationGraphResolveMetadata)
+        toConfig.isVisible() >> visible
+        toConfig.name >> name
+        toConfig.getHierarchy() >> ImmutableSet.of(name)
+        def variant = Stub(VariantGraphResolveState)
+        def toState = Stub(ConfigurationGraphResolveState)
+        toState.metadata >> toConfig
+        toState.asVariant() >> { throw new RuntimeException() }
+        return toState
     }
 
     def "configuration mapping can use all-except-wildcard on LHS"() {
@@ -274,14 +272,12 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
         def fromConfig3 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         fromConfig.hierarchy >> ImmutableSet.of("from")
         fromConfig2.hierarchy >> ImmutableSet.of("child", "from")
         fromConfig3.hierarchy >> ImmutableSet.of("other")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("*", "to-2")
@@ -302,16 +298,13 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
         def fromConfig3 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig3 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
+        def toConfig3 = configuration(toState, "to-3")
         fromConfig.hierarchy >> ImmutableSet.of("from")
         fromConfig2.hierarchy >> ImmutableSet.of("child", "from")
         fromConfig3.hierarchy >> ImmutableSet.of("other")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
-        toComponent.getConfiguration("to-3") >> toConfig3
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "to-1")
@@ -332,8 +325,8 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
         def fromConfig3 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "to-1")
+        def toConfig2 = configuration(toState, "to-2")
         fromConfig.hierarchy >> ImmutableSet.of("from")
         fromConfig2.hierarchy >> ImmutableSet.of("other")
         fromConfig3.hierarchy >> ImmutableSet.of("other2")
@@ -341,9 +334,7 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         toConfig2.visible >> true
         toState.metadata >> toComponent
         toComponent.getConfigurationNames() >> ["to-1", "to-2"]
-        toComponent.getConfiguration("unknown") >> null
-        toComponent.getConfiguration("to-1") >> toConfig1
-        toComponent.getConfiguration("to-2") >> toConfig2
+        toState.getConfiguration(_) >> null
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("from", "unknown(*)")
@@ -363,11 +354,10 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "a")
         fromConfig.hierarchy >> ImmutableSet.of("a")
         fromConfig2.hierarchy >> ImmutableSet.of("other", "a")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("a") >> toConfig1
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("a", "@")
@@ -384,15 +374,13 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "a")
+        def toConfig2 = configuration(toState, "b")
         fromConfig.name >> "a"
         fromConfig2.name >> "b"
         fromConfig.hierarchy >> ImmutableSet.of("a")
         fromConfig2.hierarchy >> ImmutableSet.of("b", "a")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("a") >> toConfig1
-        toComponent.getConfiguration("b") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put("a", "#")
@@ -409,15 +397,13 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromConfig = Stub(ModuleConfigurationMetadata)
         def fromConfig2 = Stub(ModuleConfigurationMetadata)
-        def toConfig1 = Stub(ConfigurationGraphResolveMetadata)
-        def toConfig2 = Stub(ConfigurationGraphResolveMetadata)
+        def toConfig1 = configuration(toState, "a")
+        def toConfig2 = configuration(toState, "b")
         fromConfig.name >> "a"
         fromConfig2.name >> "b"
         fromConfig.hierarchy >> ImmutableSet.of("a")
         fromConfig2.hierarchy >> ImmutableSet.of("b", "a")
         toState.metadata >> toComponent
-        toComponent.getConfiguration("a") >> toConfig1
-        toComponent.getConfiguration("b") >> toConfig2
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put(lhs, rhs)
@@ -446,11 +432,11 @@ class IvyDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         toState.metadata >> toComponent
-        toComponent.id >> toId
+        toState.id >> toId
         def fromConfig = Stub(ModuleConfigurationMetadata)
         fromConfig.hierarchy >> ImmutableSet.of("from")
         fromConfig.name >> "from"
-        toComponent.getConfiguration(_) >> null
+        toState.getConfiguration(_) >> null
 
         def configMapping = LinkedHashMultimap.create()
         configMapping.put(lhs, rhs)

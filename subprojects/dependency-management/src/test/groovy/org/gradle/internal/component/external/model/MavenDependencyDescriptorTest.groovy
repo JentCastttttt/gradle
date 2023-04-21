@@ -47,11 +47,14 @@ import org.gradle.internal.component.model.ComponentArtifactMetadata
 import org.gradle.internal.component.model.ComponentGraphResolveMetadata
 import org.gradle.internal.component.model.ComponentGraphResolveState
 import org.gradle.internal.component.model.ConfigurationGraphResolveMetadata
+import org.gradle.internal.component.model.ConfigurationGraphResolveState
 import org.gradle.internal.component.model.ConfigurationMetadata
 import org.gradle.internal.component.model.ConfigurationNotFoundException
 import org.gradle.internal.component.model.Exclude
 import org.gradle.internal.component.model.ExcludeMetadata
 import org.gradle.internal.component.model.ModuleConfigurationMetadata
+import org.gradle.internal.component.model.VariantArtifactGraphResolveMetadata
+import org.gradle.internal.component.model.VariantGraphResolveState
 
 class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
     final ModuleExclusions moduleExclusions = new ModuleExclusions()
@@ -91,14 +94,10 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromCompile = Stub(ModuleConfigurationMetadata)
-        def toCompile = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ModuleConfigurationMetadata)
+        def toCompile = configuration(toState, "compile")
+        def toMaster = configurationWithArtifacts(toState, "master")
         fromCompile.name >> "compile"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("compile") >> toCompile
-        toComponent.getConfiguration("master") >> toMaster
-        toState.resolveArtifactsFor(toMaster) >> toMaster
-        toMaster.artifacts >> ImmutableList.of(ComponentArtifactMetadata)
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -112,17 +111,12 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromRuntime = Stub(ModuleConfigurationMetadata)
         def fromRuntime2 = Stub(ModuleConfigurationMetadata)
-        def toRuntime = Stub(ConfigurationGraphResolveMetadata)
-        def toCompile = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ModuleConfigurationMetadata)
+        def toRuntime = configuration(toState, "runtime")
+        def toCompile = configuration(toState, "compile")
+        def toMaster = configurationWithArtifacts(toState, "master")
         fromRuntime.name >> "runtime"
         fromRuntime2.name >> "provided"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> toRuntime
-        toComponent.getConfiguration("compile") >> toCompile
-        toComponent.getConfiguration("master") >> toMaster
-        toState.resolveArtifactsFor(toMaster) >> toMaster
-        toMaster.artifacts >> ImmutableList.of(ComponentArtifactMetadata)
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -137,16 +131,11 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromRuntime = Stub(ModuleConfigurationMetadata)
         def fromRuntime2 = Stub(ModuleConfigurationMetadata)
-        def toRuntime = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ModuleConfigurationMetadata)
+        def toRuntime = configurationWithHierarchy(toState, "runtime", ImmutableSet.of("runtime", "compile"))
+        def toMaster = configurationWithArtifacts(toState, "master")
         fromRuntime.name >> "runtime"
         fromRuntime2.name >> "provided"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> toRuntime
-        toComponent.getConfiguration("master") >> toMaster
-        toRuntime.hierarchy >> ImmutableSet.of("runtime", "compile")
-        toState.resolveArtifactsFor(toMaster) >> toMaster
-        toMaster.artifacts >> ImmutableList.of(ComponentArtifactMetadata)
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -160,12 +149,9 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromRuntime = Stub(ModuleConfigurationMetadata)
-        def toRuntime = Stub(ConfigurationGraphResolveMetadata)
+        def toRuntime = configurationWithHierarchy(toState, "runtime", ImmutableSet.of("compile", "runtime"))
         fromRuntime.name >> "runtime"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> toRuntime
-        toComponent.getConfiguration("master") >> null
-        toRuntime.hierarchy >> ImmutableSet.of("compile", "runtime")
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -178,15 +164,10 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromRuntime = Stub(ModuleConfigurationMetadata)
-        def toRuntime = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ConfigurationGraphResolveMetadata)
-        toRuntime.artifacts >> ImmutableList.of()
-        toMaster.artifacts >> ImmutableList.of()
+        def toRuntime = configurationWithHierarchy(toState, "runtime", ImmutableSet.of("compile", "runtime"))
+        def toMaster = configuration(toState, "master")
         fromRuntime.name >> "runtime"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> toRuntime
-        toComponent.getConfiguration("master") >> toMaster
-        toRuntime.hierarchy >> ImmutableSet.of("compile", "runtime")
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -199,15 +180,11 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromCompile = Stub(ModuleConfigurationMetadata)
-        def toDefault = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ModuleConfigurationMetadata)
+        def toDefault = configuration(toState, "default")
+        def toMaster = configurationWithArtifacts(toState, "master")
         fromCompile.name >> "compile"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("compile") >> null
-        toComponent.getConfiguration("default") >> toDefault
-        toComponent.getConfiguration("master") >> toMaster
-        toState.resolveArtifactsFor(toMaster) >> toMaster
-        toMaster.artifacts >> ImmutableList.of(ComponentArtifactMetadata)
+        toState.getConfiguration(_) >> null
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -220,16 +197,11 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def toState = Stub(ComponentGraphResolveState)
         def toComponent = Stub(ComponentGraphResolveMetadata)
         def fromRuntime = Stub(ModuleConfigurationMetadata)
-        def toDefault = Stub(ConfigurationGraphResolveMetadata)
-        def toMaster = Stub(ModuleConfigurationMetadata)
+        def toDefault = configurationWithHierarchy(toState, "default", ImmutableSet.of("compile", "default"))
+        def toMaster = configurationWithArtifacts(toState, "master")
         fromRuntime.name >> "runtime"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> null
-        toComponent.getConfiguration("default") >> toDefault
-        toComponent.getConfiguration("master") >> toMaster
-        toState.resolveArtifactsFor(toMaster) >> toMaster
-        toDefault.hierarchy >> ImmutableSet.of("compile", "default")
-        toMaster.artifacts >> ImmutableList.of(ComponentArtifactMetadata)
+        toState.getConfiguration(_) >> null
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -244,9 +216,7 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def fromCompile = Stub(ConfigurationMetadata)
         fromCompile.name >> "compile"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("compile") >> null
-        toComponent.getConfiguration("default") >> null
-        toComponent.getConfiguration("master") >> null
+        toState.getConfiguration(_) >> null
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
@@ -264,9 +234,7 @@ class MavenDependencyDescriptorTest extends ExternalDependencyDescriptorTest {
         def fromRuntime = Stub(ConfigurationMetadata)
         fromRuntime.name >> "runtime"
         toState.metadata >> toComponent
-        toComponent.getConfiguration("runtime") >> null
-        toComponent.getConfiguration("default") >> null
-        toComponent.getConfiguration("master") >> null
+        toState.getConfiguration(_) >> null
 
         def dep = mavenDependencyMetadata(MavenScope.Compile, Stub(ModuleComponentSelector), [])
 
